@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This CloudFormation template to create RDS db instances.
+
+Resources:
+  SecretsManagerDBAdmin:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Description: AWS RDS admin credentials
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
+  RDSCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      MasterUsername: !Sub "{{resolve:secretsmanager:${SecretsManagerDBAdmin}::username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${SecretsManagerDBAdmin}::password}}"
+      Engine: aurora-mysql
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBClusterParameterGroupName: !Ref RDSDBClusterParameterGroup
+      VpcSecurityGroupIds:
+        - sg-0aff071e28e5ca0d8
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: 13:00-13:30
+      DatabaseName: multiauthdb
+      DBClusterIdentifier: multiauth-aurora-mysql-stg
+      DeletionProtection: false
+      EngineMode: provisioned
+      EngineVersion: 8.0.mysql_aurora.3.02.0
+      PreferredMaintenanceWindow: tue:13:30-tue:14:00
+      StorageEncrypted: true
+      Tags:
+        - Key: Name
+          Value: aurora-mysql-cluster-stg
+
+  RDSDBInstance1:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref RDSDBParameterGroup
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref RDSCluster
+      PubliclyAccessible: "false"
+      AvailabilityZone: ap-northeast-1a
+      DBInstanceClass: db.r5.large
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+      DBInstanceIdentifier: aurora-mysql-1
+      EnablePerformanceInsights: false
+      PreferredMaintenanceWindow: wed:13:30-wed:14:00
+      PromotionTier: 1
+      Tags:
+        - Key: Name
+          Value: aurora-mysql-1-stg
+
+  # DB subnet group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: db-subnet-group-stg
+      DBSubnetGroupDescription: db-subnet-group
+      SubnetIds:
+        - subnet-06e00fa8e0d2be613
+        - subnet-0702620e3ece4f690
+      Tags:
+        - Key: Name
+          Value: db-subnet-group-stg
+
+  # DB Cluster Parameter Group
+  RDSDBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: db-cluster-param-group-stg
+      Family: aurora-mysql8.0
+      Parameters:
+        time_zone: Asia/Tokyo
+      Tags:
+        - Key: Name
+          Value: db-cluster-param-group-stg
+
+  # DB parameter group
+  RDSDBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: db-param-group-stg
+      Family: aurora-mysql8.0
+      Tags:
+        - Key: Name
+          Value: db-param-group-stg
