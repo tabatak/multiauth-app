@@ -1,0 +1,433 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: multiauth network stack
+Resources:
+  # ------------------------------------------------------------#
+  #  VPC
+  # ------------------------------------------------------------#
+  MultiauthVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: multiauth-vpc
+
+  # ------------------------------------------------------------#
+  #  subnet, route table, IGW
+  # ------------------------------------------------------------#
+  # IGW
+  MultiauthIgw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: multiauth-igw
+  MultiauthVpcgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: MultiauthVpc
+      InternetGatewayId:
+        Ref: MultiauthIgw
+
+  # public subnet (ingress)
+  MultiauthSubnetPublicIngress1A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      VpcId:
+        Ref: MultiauthVpc
+      AvailabilityZone: 
+        Fn::Select: 
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: multiauth-subnet-public-ingress-1a
+        - Key: Type
+          Value: Public
+  MultiauthSubnetPublicIngress1C:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId:
+        Ref: MultiauthVpc
+      AvailabilityZone: 
+        Fn::Select: 
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: multiauth-subnet-public-ingress-1c
+        - Key: Type
+          Value: Public
+  MultiauthRouteIngress:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MultiauthVpc
+      Tags:
+        - Key: Name
+          Value: multiauth-route-ingress
+  MultiauthRouteIngressAssociation1A:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: MultiauthRouteIngress
+      SubnetId:
+        Ref: MultiauthSubnetPublicIngress1A
+  MultiauthRouteIngressAssociation1C:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: MultiauthRouteIngress
+      SubnetId:
+        Ref: MultiauthSubnetPublicIngress1C
+  MultiauthRouteIngressDefault:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId:
+        Ref: MultiauthRouteIngress
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: MultiauthIgw
+    DependsOn:
+      - MultiauthVpcgwAttachment
+
+  # private subnet (コンテナ配置用)
+  MultiauthSubnetPrivateContainer1A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.8.0/24
+      VpcId:
+        Ref: MultiauthVpc
+      AvailabilityZone: 
+        Fn::Select: 
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: multiauth-subnet-private-container-1a
+        - Key: Type
+          Value: Isolated
+  MultiauthSubnetPrivateContainer1C:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.9.0/24
+      VpcId:
+        Ref: MultiauthVpc
+      AvailabilityZone: 
+        Fn::Select: 
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: multiauth-subnet-private-container-1c
+        - Key: Type
+          Value: Isolated
+  MultiauthRouteContainer:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MultiauthVpc
+      Tags:
+        - Key: Name
+          Value: multiauth-route-container
+  MultiauthRouteContainerAssociation1A:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: MultiauthRouteContainer
+      SubnetId:
+        Ref: MultiauthSubnetPrivateContainer1A
+  MultiauthRouteContainerAssociation1C:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: MultiauthRouteContainer
+      SubnetId:
+        Ref: MultiauthSubnetPrivateContainer1C
+
+  # private subnet (DB)
+  MultiauthSubnetPrivateDb1A:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.16.0/24
+      VpcId:
+        Ref: MultiauthVpc
+      AvailabilityZone: 
+        Fn::Select: 
+          - 0
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: multiauth-subnet-private-db-1a
+        - Key: Type
+          Value: Isolated
+  MultiauthSubnetPrivateDb1C:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.17.0/24
+      VpcId:
+        Ref: MultiauthVpc
+      AvailabilityZone: 
+        Fn::Select: 
+          - 1
+          - Fn::GetAZs: ""
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: multiauth-subnet-private-db-1c
+        - Key: Type
+          Value: Isolated
+  MultiauthRouteDb:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MultiauthVpc
+      Tags:
+        - Key: Name
+          Value: multiauth-route-db
+  MultiauthRouteDbAssociation1A:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: MultiauthRouteDb
+      SubnetId:
+        Ref: MultiauthSubnetPrivateDb1A
+  MultiauthRouteDbAssociation1C:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId:
+        Ref: MultiauthRouteDb
+      SubnetId:
+        Ref: MultiauthSubnetPrivateDb1C
+
+
+  # ------------------------------------------------------------#
+  #  security groups
+  # ------------------------------------------------------------#
+  # ingress subnet
+  MultiauthSgIngress:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ingress
+      GroupName: multiauth-sg-ingress
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: from 0.0.0.0/0:80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIpv6: ::/0
+          Description: from ::/0:80
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+      Tags:
+        - Key: Name
+          Value: multiauth-sg-ingress
+      VpcId:
+        Ref: MultiauthVpc
+  ## container subnet
+  MultiauthSgContainer:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group of backend app
+      GroupName: multiauth-sg-container
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: multiauth-sg-container
+      VpcId:
+        Ref: MultiauthVpc
+  ## DB subnet
+  MultiauthSgDb:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group of database
+      GroupName: multiauth-sg-database
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: multiauth-sg-db
+      VpcId:
+        Ref: MultiauthVpc
+  ## for vpc endpoint
+  MultiauthSgVpce:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group of VPC Endpoint
+      GroupName: multiauth-sg-vpce
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      Tags:
+        - Key: Name
+          Value: multiauth-sg-vpce
+      VpcId:
+        Ref: MultiauthVpc
+
+  ## Internet LB -> Container
+  MultiauthSgContainerFromsSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      Description: HTTP for Ingress
+      FromPort: 80
+      GroupId:
+        Fn::GetAtt:
+          - MultiauthSgContainer
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - MultiauthSgIngress
+          - GroupId
+      ToPort: 80
+  ## Internet LB -> DB
+  MultiauthSgDbFromSgIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      Description: MySQL protocol from backend App
+      FromPort: 3306
+      GroupId:
+        Fn::GetAtt:
+          - MultiauthSgDb
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - MultiauthSgIngress
+          - GroupId
+      ToPort: 3306
+  ## container -> DB
+  MultiauthSgDbFromSgContainerTCP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      Description: MySQL protocol from backend App
+      FromPort: 3306
+      GroupId:
+        Fn::GetAtt:
+          - MultiauthSgDb
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - MultiauthSgContainer
+          - GroupId
+      ToPort: 3306
+  ### container -> VPC endpoint
+  MultiauthSgVpceFromSgContainerTCP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      Description: HTTPS for Container App
+      FromPort: 443
+      GroupId:
+        Fn::GetAtt:
+          - MultiauthSgVpce
+          - GroupId
+      SourceSecurityGroupId:
+        Fn::GetAtt:
+          - MultiauthSgContainer
+          - GroupId
+      ToPort: 443
+
+  # ------------------------------------------------------------#
+  #  VPC endpoint
+  # ------------------------------------------------------------#
+  # for ECR
+  EcrInterfaceEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: True
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      VpcId: !Ref MultiauthVpc
+      SubnetIds: 
+        - !Ref MultiauthSubnetPrivateContainer1A
+        - !Ref MultiauthSubnetPrivateContainer1C
+      SecurityGroupIds:
+        - !Ref MultiauthSgVpce
+  ## for DKR
+  DkrInterfaceEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: True
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      VpcId: !Ref MultiauthVpc
+      SubnetIds: 
+        - !Ref MultiauthSubnetPrivateContainer1A
+        - !Ref MultiauthSubnetPrivateContainer1C
+      SecurityGroupIds:
+        - !Ref MultiauthSgVpce
+  ## for cloudwatch logs
+  CwlInterfaceEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: True
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      VpcId: !Ref MultiauthVpc
+      SubnetIds: 
+        - !Ref MultiauthSubnetPrivateContainer1A
+        - !Ref MultiauthSubnetPrivateContainer1C
+      SecurityGroupIds:
+        - !Ref MultiauthSgVpce
+  ## for S3
+  S3InterfaceEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcEndpointType: Gateway
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref MultiauthVpc
+      RouteTableIds: 
+        - !Ref MultiauthRouteContainer
+
+
+  # ------------------------------------------------------------#
+  #  NATGateway
+  # ------------------------------------------------------------#
+  # NATGatewayA Create
+  NATGatewayA: 
+    Type: "AWS::EC2::NatGateway"
+    Properties: 
+      AllocationId: !GetAtt NATGatewayAEIP.AllocationId 
+      SubnetId: !Ref MultiauthSubnetPrivateContainer1A
+      Tags: 
+        - Key: Name
+          Value: "multiauth-natgw-a"
+
+# NATGateway For EIP Create
+  NATGatewayAEIP: 
+    Type: "AWS::EC2::EIP"
+    Properties: 
+      Domain: vpc
+
+# PrivateRouteA Update
+  PrivateRouteA: 
+    Type: "AWS::EC2::Route"
+    Properties: 
+      RouteTableId: !Ref MultiauthRouteContainer
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGatewayA
